@@ -50,14 +50,17 @@ class PyMacroParser(object):
         stack.append(root)
         index = 0
         start = 0
-        end = start
+        # end = start
         while len(stack) > 0 and index < len(s):
             node = stack.pop()
             while index<len(s):
                 i=s[index]
                 index+=1
                 if i == ','or index==len(s):
-                    data=s[start:end]
+                    if index==len(s):
+                        data = s[start:]
+                    else:
+                       data=s[start:index-1]
                     node_finished=False
                     if data.find('}')>-1:
                         data=data.replace('}','')
@@ -66,19 +69,16 @@ class PyMacroParser(object):
                         replace_index=data.find('$')
                         data=data[:replace_index]+real_str.pop(0)+data[replace_index+1:]
                     node.data.append(self._convert_rest(data))
-                    start=end+1
+                    start=index
                     if node_finished==True:
-                        end+=1
                         break;
                 elif i=='{':
                     new_node=TupleData()
                     node.child_tuple_data.append(new_node)
-                    end+=1
-                    start=end
+                    start=index
                     stack.append(node)
                     stack.append(new_node)
                     break
-                end += 1
         return self._resolve_tuple_data(root)
 
     def _resolve_tuple_data(self,node):
@@ -90,22 +90,33 @@ class PyMacroParser(object):
         return dict_item
 
     def _convert_cpp_to_python (self, s):
-        # 转换聚合数据为元组
-        v, real_str = s
-        if v.find('{')>-1:
-            start=v.find('{')
-            end=v.rfind('}')
-            if end==-1 or end<start:
-                raise Exception('missing }')
-            return self._strtotuple((v[start+1:end],real_str))
-        return self._convert_rest(v)
+        try:
+            # 转换聚合数据为元组
+            v, real_str = s
+            if v.find('{')>-1:
+                start=v.find('{')
+                end=v.rfind('}')
+                if end==-1 or end<start:
+                    raise Exception('missing }')
+                return self._strtotuple((v[start+1:end],real_str))
+
+            #把保存的字符串还原
+            while v.find('$') > -1:
+                replace_index = v.find('$')
+                v = v[:replace_index] + real_str.pop(0) + v[replace_index + 1:]
+            return self._convert_rest(v)
+        except :
+            raise Exception('resolve error')
+
 
     def _convert_rest(self, v):
+        v=v.strip()
+        if v=='':
+            return v
         if v=='false':
             return False
         if v=='true':
             return True
-
         if v=='None':
             return None
         index = v.find("L\"")
@@ -122,8 +133,6 @@ class PyMacroParser(object):
         if v[0] == '\'' and v[-1] == '\'':
             return self._chartointeger(v[1:-1])
 
-
-
         #转换有f的浮点型
         if v.find("\"")==-1 and v.find('{')==-1 and v.find('f')>-1:
             return string.atof(self._sign_strip(v.replace('f','')))
@@ -131,6 +140,9 @@ class PyMacroParser(object):
         # 转换有F的浮点型
         if v.find("\"") == -1 and v.find('{') == -1 and v.find('F') > -1:
             return string.atof(self._sign_strip(v.replace('F', '')))
+
+        #其他进制转换为10进制
+        v=self._str_to_num(v)
 
         # 转换为整数
         try:
@@ -149,6 +161,15 @@ class PyMacroParser(object):
             return f
 
         return  v
+    def _str_to_num(self,v):
+        if v.find('0x')>-1:
+            return int(v,16)
+        if v.find('0o')>-1:
+            return int(v,8)
+        if v.find('0b')>-1:
+            return int(v,2)
+        return v
+
 
     def _chartointeger(self, s):
         res=0
