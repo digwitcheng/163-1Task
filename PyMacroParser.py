@@ -5,8 +5,8 @@ import string
 class Session(object):
     def __init__(self, s):
         self.key = s
-        self.define_list = []
-        self.notdefine_list = []
+        #self.define_list = []
+        #self.notdefine_list = []
         self.define_data = []
         self.notdefine_data = []
         self.cur_state = 2
@@ -14,7 +14,9 @@ class Session(object):
 class TupleData(object) :
      def __init__(self) :
         self.data = []
-        self.child_tuple_data = []
+        # self.child_tuple_data = []
+        # self.right_data=None
+
 
 def split_string(line):
     start=line.find('#')
@@ -41,10 +43,14 @@ class PyMacroParser(object):
     """
     def __init__(self):
         self._pre_define_macros=[]
+        self._root=None
         self._dump_dict={}
 
     def _strtotuple(self,tup_str):
         s,real_str=tup_str
+        temp_str = []
+        for i in real_str:
+            temp_str.append(i)
         stack = []
         root = TupleData()
         stack.append(root)
@@ -56,7 +62,7 @@ class PyMacroParser(object):
             while index<len(s):
                 i=s[index]
                 index+=1
-                if i == ','or index==len(s):
+                if i == ',' or i==';' or index==len(s):
                     if index==len(s):
                         data = s[start:]
                     else:
@@ -65,16 +71,16 @@ class PyMacroParser(object):
                     if data.find('}')>-1:
                         data=data.replace('}','')
                         node_finished=True
-                    while data.find('$')>-1:
+                    while data.find('$')>-1 and len(temp_str)>0:
                         replace_index=data.find('$')
-                        data=data[:replace_index]+real_str.pop(0)+data[replace_index+1:]
+                        data=data[:replace_index] + temp_str.pop(0) + data[replace_index + 1:]
                     node.data.append(self._convert_rest(data))
                     start=index
                     if node_finished==True:
-                        break;
+                        break
                 elif i=='{':
                     new_node=TupleData()
-                    node.child_tuple_data.append(new_node)
+                    node.data.append(new_node)
                     start=index
                     stack.append(node)
                     stack.append(new_node)
@@ -84,35 +90,40 @@ class PyMacroParser(object):
     def _resolve_tuple_data(self,node):
         dict_item=()
         for i in node.data:
-            dict_item=dict_item+(i,)
-        for item in node.child_tuple_data:
-            dict_item=dict_item+(self._resolve_tuple_data(item),)
+            if isinstance(i,TupleData):
+                dict_item=dict_item+(self._resolve_tuple_data(i),)
+            else:
+                if i!=None:
+                   dict_item=dict_item+(i,)
         return dict_item
 
     def _convert_cpp_to_python (self, s):
         try:
             # 转换聚合数据为元组
             v, real_str = s
+            temp_v=[]
+            for i in real_str:
+                temp_v.append(i)
             if v.find('{')>-1:
                 start=v.find('{')
                 end=v.rfind('}')
                 if end==-1 or end<start:
                     raise Exception('missing }')
-                return self._strtotuple((v[start+1:end],real_str))
+                return self._strtotuple((v[start+1:end],temp_v))
 
             #把保存的字符串还原
             while v.find('$') > -1:
                 replace_index = v.find('$')
-                v = v[:replace_index] + real_str.pop(0) + v[replace_index + 1:]
+                v = v[:replace_index] + temp_v.pop(0) + v[replace_index + 1:]
             return self._convert_rest(v)
         except :
-            raise Exception('resolve error')
+            raise
 
 
     def _convert_rest(self, v):
         v=v.strip()
         if v=='':
-            return v
+            return None
         if v=='false':
             return False
         if v=='true':
@@ -123,7 +134,7 @@ class PyMacroParser(object):
         if index > -1:
             v = v.replace('L\"', "")
             v = v.replace('\"', "")
-            return v.decode('utf-8')
+            return v.decode('utf-8') #encode('string_escape')
 
         index = v.find("\"")
         if index > -1:
@@ -133,6 +144,7 @@ class PyMacroParser(object):
         if v[0] == '\'' and v[-1] == '\'':
             return self._chartointeger(v[1:-1])
 
+
         #转换有f的浮点型
         if v.find("\"")==-1 and v.find('{')==-1 and v.find('f')>-1:
             return string.atof(self._sign_strip(v.replace('f','')))
@@ -140,6 +152,14 @@ class PyMacroParser(object):
         # 转换有F的浮点型
         if v.find("\"") == -1 and v.find('{') == -1 and v.find('F') > -1:
             return string.atof(self._sign_strip(v.replace('F', '')))
+
+        # 转换有l的浮点型
+        if v.find("\"") == -1 and v.find('{') == -1 and v.find('l') > -1:
+            return string.atof(self._sign_strip(v.replace('l', '')))
+
+        # 转换有L的浮点型
+        if v.find("\"") == -1 and v.find('{') == -1 and v.find('L') > -1:
+            return string.atof(self._sign_strip(v.replace('L', '')))
 
         #其他进制转换为10进制
         v=self._str_to_num(v)
@@ -188,36 +208,43 @@ class PyMacroParser(object):
         else:
             return '-'+data[-1].strip()
 
-    def _convert_session_datas(self, node, defindString):
+    def _convert_session_datas(self, node, defindString, dump_dict):
         index = defindString.count(node.key)
         if index > 0:
-            for k,(v,real_str) in node.define_data:
-                if k == 'define':
-                    if defindString.count(v) == 0:
-                        defindString.append(v)
-                        self._dump_dict[v]='None'
-                elif k == 'undef':
-                    if defindString.count(v) > 0:
-                        defindString.remove(v)
-                        del self._dump_dict[v]
-                else :
-                    self._dump_dict[k]=self._convert_cpp_to_python((v, real_str))
-            for item in node.define_list:
-                self._convert_session_datas(item, defindString)
+            for item in node.define_data:
+                if isinstance(item,Session):
+                    self._convert_session_datas(item, defindString, dump_dict)
+                else:
+                    k, (v, real_str)=item
+                    if k == 'define':
+                        if defindString.count(v) == 0:
+                            defindString.append(v)
+                            dump_dict[v]= None
+                    elif k == 'undef':
+                        if defindString.count(v) > 0:
+                            defindString.remove(v)
+                        if dump_dict.has_key(v):
+                            del dump_dict[v]
+                    else :
+                        dump_dict[k]=self._convert_cpp_to_python((v, real_str))
+
         else:
-            for k,(v,real_str) in node.notdefine_data:
-                if k == 'define':
-                    if defindString.count(v) == 0:
-                        defindString.append(v)
-                        self._dump_dict[v]='None'
-                elif k == 'undef':
-                    if defindString.count(v) > 0:
-                        defindString.remove(v)
-                        del self._dump_dict[v]
-                else :
-                    self._dump_dict[k]=self._convert_cpp_to_python((v, real_str))
-            for item in node.notdefine_list:
-                self._convert_session_datas(item, defindString)
+            for item in node.notdefine_data:
+                if isinstance(item,Session):
+                    self._convert_session_datas(item, defindString, dump_dict)
+                else:
+                    k, (v, real_str)=item
+                    if k == 'define':
+                        if defindString.count(v) == 0:
+                            defindString.append(v)
+                            dump_dict[v]= None
+                    elif k == 'undef':
+                        if defindString.count(v) > 0:
+                            defindString.remove(v)
+                        if dump_dict.has_key(v):
+                            del dump_dict[v]
+                    else :
+                        dump_dict[k]=self._convert_cpp_to_python((v, real_str))
 
 
     def _load_and_reomve_notes(self,f):
@@ -230,7 +257,7 @@ class PyMacroParser(object):
                     if is_notes==True:  #判断‘*/’结束符是否在当前行
                         end=line.find('*/')
                         if end>-1:
-                            line=line.replace(line[0:end+2],"")
+                            line=line.replace(line[0:end+2]," ")
                             is_notes=False
                         else:  #当前行还是注释行，跳过
                             line = p.readline()
@@ -272,13 +299,14 @@ class PyMacroParser(object):
                             is_escape = True
                         if i == '\"':
                             break
-                    old_string.append(line[str_start:end + 1])
-                    line = line.replace(line[str_start:end + 1], '$')
+                    str_value=line[str_start:end + 1]
+                    old_string.append(str_value)
+                    line = line.replace(str_value, '$')
                     continue
                 else:  # 注释/*在前面
                     if line.find('*/', notes_start+2, len(line)) > -1:
                         sub_string=line[notes_start:line.find('*/',notes_start+2,len(line)) + 2]
-                        line = line.replace(sub_string, '')
+                        line = line.replace(sub_string, ' ')
                         continue
                     else:  # */在下一行,删除/*后面的东西
                         line = line[:notes_start]
@@ -297,13 +325,14 @@ class PyMacroParser(object):
                         is_escape = True
                     if i == '\"':
                         break
-                old_string.append(line[str_start:end + 1])
-                line = line.replace(line[str_start:end + 1], '$')
+                str_value = line[str_start:end + 1]
+                old_string.append(str_value)
+                line = line.replace(str_value, '$')
                 continue
             elif notes_start>-1:#没有字符串
                 if line.find('*/', notes_start+2, len(line)) > -1:
                     sub_string = line[notes_start:line.find('*/', notes_start+2, len(line)) + 2]
-                    line = line.replace(sub_string, '')
+                    line = line.replace(sub_string, ' ')
                     continue
                 else:  # */在下一行,删除/*后面的东西
                     line = line[:notes_start]
@@ -352,9 +381,9 @@ class PyMacroParser(object):
                     new_node=Session(data[1])
                     new_node.cur_state=2
                     if node.cur_state==1:
-                        node.define_list.append(new_node)
+                        node.define_data.append(new_node)
                     else:
-                        node.notdefine_list.append(new_node)
+                        node.notdefine_data.append(new_node)
                     stack.append(node)
                     stack.append(new_node)
                     break
@@ -362,9 +391,9 @@ class PyMacroParser(object):
                     new_node=Session(data[1])
                     new_node.cur_state=1
                     if node.cur_state==1:
-                        node.define_list.append(new_node)
+                        node.define_data.append(new_node)
                     else:
-                        node.notdefine_list.append(new_node)
+                        node.notdefine_data.append(new_node)
                     stack.append(node)
                     stack.append(new_node)
                     break
@@ -375,11 +404,17 @@ class PyMacroParser(object):
                         node.cur_state=1
 
                 index += 1
+                if index >= len(context):
+                    break
                 data = split_string(context[index][0])
             index += 1
 
-        self._dump_dict={}
-        self._convert_session_datas(root, self._pre_define_macros)
+        self._root=root
+        try:
+            self._dump_dict={}
+            self._convert_session_datas(self._root, self._pre_define_macros, self._dump_dict)
+        except:
+            raise
 
 
     def preDefine(self,s):
@@ -390,11 +425,17 @@ class PyMacroParser(object):
         :return:None
         """
         self._pre_define_macros=[]
+        self._dump_dict={}
         macros=s.split(';')
         for item in macros:
             if item.strip()!='':
                 self._pre_define_macros.append(item)
+                self._dump_dict[item]=None
 
+        try:
+            self._convert_session_datas(self._root, self._pre_define_macros, self._dump_dict)
+        except:
+            raise
 
     def dumpDict(self):
         """
@@ -402,7 +443,18 @@ class PyMacroParser(object):
 
         :return:dict
         """
-        return self._dump_dict
+
+        dump_dict =self._deepcopy(self._dump_dict)
+        return dump_dict
+
+    def _deepcopy(self, src_dict={}):
+        res={}
+        for k,v in src_dict.items():
+            if isinstance(v,dict):
+                res[k]=self._deepcopy(v)
+            else:
+                res[k]=v
+        return res
 
     def dump(self,f):
         """
@@ -411,16 +463,88 @@ class PyMacroParser(object):
         :param f:file path
         :return:None
         """
-        pass
+        try:
+            with open(f, 'w') as p:
+                for k,v in self._dump_dict.items():
+                    if self.is_w_string(v):
+                        v = "L\"" + v + "\""
+                    elif self._is_string(v):
+                        v="\""+v+"\""
+                    elif v is False:
+                        v='false'
+                    elif v is True:
+                        v='true'
+                    elif v is None:
+                        v=''
+                    elif self._is_tuple(v):
+                        old_string=[]
+                        v=self._remove_string(v,old_string)
+                        v = v.replace('(', '{')
+                        v = v.replace(')', '}')
+                        start=v.find('$',0,len(v))
+                        while start>-1:
+                            v=v[:start]+'\"'+old_string.pop(0)+'\"'+v[start+1:]
+                            start = v.find('$',start, len(v))
+                    p.write('#define '+str(k)+' '+ str(v)+'\n')
+        except :
+             raise
 
+    def _remove_string(self,v,old_string):
+        for i in v:
+            if self._is_string(i):
+                old_string.append(i)
+            elif self._is_tuple(i):
+                self._remove_string(i,old_string)
+        v=str(tuple(v))
+        while v.find('\'')>-1:
+            start=v.find('\'')
+            end=v.find('\'',start+1,len(v))
+            if end>start:
+                sub=v[start:end+1]
+                v=v.replace(sub,'$')
+        while v.find('\'')>-1:
+            start=v.find('\'')
+            end=v.find('\'',start+1,len(v))
+            if end>start:
+                sub = v[start:end + 1]
+                v = v.replace(sub, '$')
+        return v
+    def _is_tuple(self,obj):
+        try:
+            return isinstance(obj,tuple)
+        except:
+            return False
+    def is_w_string(self,obj):
+        try:
+           return isinstance(obj,unicode)
+        except:
+            return False
+        else:
+            return True
 
-
+    def _is_string(self,obj):
+        try:
+            obj+''
+        except:
+            return False
+        else:
+            return True
 
 if __name__ == "__main__":
     a1 = PyMacroParser()
     a2 = PyMacroParser()
-    a1.load("a2.cpp")
-    print a1.dumpDict()
+    a1.load("a.cpp")
+    filename = "b.cpp"
+    a1.dump(filename)  # 没有预定义宏的情况下，dump cpp
+    a2.load(filename)
+    print a2.dumpDict()
+    a1.preDefine("MC1;MC2")  # 指定预定义宏，再dump
+    print  a1.dumpDict()
+    a1.dump("c.cpp")
+    #
+    # a1.preDefine("   \f\n\r\tMC1; \t\\MC2; \v\vMC3\t; \fMC4")
+    # print a1.dumpDict()
+
     # print '-------------------------'
     # a1.preDefine("MC1;MC2")
     # a1.load("a2.cpp")
