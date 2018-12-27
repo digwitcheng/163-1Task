@@ -62,8 +62,8 @@ class PyMacroParser(object):
             while index<len(s):
                 i=s[index]
                 index+=1
-                if i == ',' or i==';' or index==len(s):
-                    if index==len(s):
+                if i == ',' or index==len(s):
+                    if index==len(s) and i!=',':
                         data = s[start:]
                     else:
                        data=s[start:index-1]
@@ -85,16 +85,20 @@ class PyMacroParser(object):
                     stack.append(node)
                     stack.append(new_node)
                     break
+                if index==len(s) and s[-1]==',':
+                    node.data.append(self._convert_rest(''))
         return self._resolve_tuple_data(root)
 
     def _resolve_tuple_data(self,node):
         dict_item=()
         for i in node.data:
             if isinstance(i,TupleData):
-                dict_item=dict_item+(self._resolve_tuple_data(i),)
+                sub=self._resolve_tuple_data(i)
+                #if len(sub)>0:
+                dict_item=dict_item+(sub,)
             else:
-                if i!=None:
-                   dict_item=dict_item+(i,)
+               if i!=None:
+                  dict_item=dict_item+(i,)
         return dict_item
 
     def _convert_cpp_to_python (self, s):
@@ -268,13 +272,69 @@ class PyMacroParser(object):
              raise
         return context
 
+    def _my_replace(self,line,start,end,save_list,placeholder):
+        sub_string = line[start:end + 1]
+        save_list.append(sub_string)
+        return  line.replace(sub_string, placeholder)
+
+
+    def _replace_string(self,line,old_string):
+        start=0
+        end = start
+        state=0   #0表示没有匹配，1：正在匹配“”，2：正在匹配‘’，3：正在匹配/**/ ，4：正在匹配转义符\
+        old_char=''
+        for i in line:
+            flag=False
+            if state==0:
+                if i=='\"':
+                    state=1
+                    start=end
+                elif i=='\'':
+                    state=2
+                    start=end
+                elif i=='*':
+                     if old_char=='/':
+                        state=3
+                        start=end-1
+                elif i=='\\':
+                    state=4
+            else:
+                if state==1 and i=='\"' and old_char!='\\':#结束匹配
+                    line = self._my_replace(line, start, end,  old_string,'$')
+                    state=0
+                    return self._replace_string(line, old_string)
+                elif state==2 and i=='\''and old_char!='\\':
+                    line = self._my_replace(line,start,end,old_string,'$')
+                    state=0
+                    return self._replace_string(line, old_string)
+                elif state==3 and i=='/'and old_char=='*':
+                    line = self._my_replace(line, start, end, [], ' ')
+                    state=0
+                    return self._replace_string(line, old_string)
+                elif state==4:
+                    old_char=''
+                    state=0
+                    flag=True
+            old_char = i
+            end+=1
+            if flag:
+                old_char=''
+
+        if state!=3 and state!=0:
+            raise Exception('missing \"or \'')
+        if state==3:
+            return line,True
+        else:
+            return line,False
+
     def remove_notes(self, context, line):
 
-        is_notes=False
         if (line.find("//") > -1 ):
              if line.find('\"')>-1 and line.find('\"')<line.find('//'):
                 pass
              elif line.find('/*')>-1 and line.find('/*')<line.find('//'):
+                 pass
+             elif line.find('\'')>-1 and line.find('\'')<line.find('//'):
                  pass
              else:
                 start = line.find("//")  # 删除最前面“//”注释
@@ -282,63 +342,17 @@ class PyMacroParser(object):
 
         # 屏蔽掉字符串，删除注释后再插入原来的位置（TODO?并且把转义字符转成相应的字符）
         old_string = []  # 里面的项为(原字符串),在去除掉注释后再插入
-        while line.find('\"') > -1 or line.find('/*') > -1:  # 找到"字符串则存储，并删掉，找到注释/*直接删掉
-            str_start = line.find('\"')
-            notes_start = line.find('/*')
-            if str_start > -1 and notes_start > -1:  # 两个同时找到，则看那个在前面
-                if str_start < notes_start:  # 字符串在前面
-                    end = str_start
-                    is_escape = False
-                    for i in line[str_start + 1:]:
-                        end += 1
-                        if is_escape:
-                            is_escape = False
-                            if i=='\"':
-                               continue
-                        if i == '\\':
-                            is_escape = True
-                        if i == '\"':
-                            break
-                    str_value=line[str_start:end + 1]
-                    old_string.append(str_value)
-                    line = line.replace(str_value, '$')
-                    continue
-                else:  # 注释/*在前面
-                    if line.find('*/', notes_start+2, len(line)) > -1:
-                        sub_string=line[notes_start:line.find('*/',notes_start+2,len(line)) + 2]
-                        line = line.replace(sub_string, ' ')
-                        continue
-                    else:  # */在下一行,删除/*后面的东西
-                        line = line[:notes_start]
-                        is_notes = True
-                        break
-            elif str_start > -1:  # 没有/*注释
-                end = str_start
-                is_escape = False
-                for i in line[str_start + 1:]:
-                    end += 1
-                    if is_escape:
-                        is_escape = False
-                        if i == '\"':
-                            continue
-                    if i == '\\':
-                        is_escape = True
-                    if i == '\"':
-                        break
-                str_value = line[str_start:end + 1]
-                old_string.append(str_value)
-                line = line.replace(str_value, '$')
-                continue
-            elif notes_start>-1:#没有字符串
-                if line.find('*/', notes_start+2, len(line)) > -1:
-                    sub_string = line[notes_start:line.find('*/', notes_start+2, len(line)) + 2]
-                    line = line.replace(sub_string, ' ')
-                    continue
-                else:  # */在下一行,删除/*后面的东西
-                    line = line[:notes_start]
-                    is_notes = True
-                    break
+        line,is_notes=self._replace_string(line,old_string)
+
+        if is_notes:
+            start=line.find("/*")
+            if start>-1:
+                line=line[:start]
         start = line.find("//")  # 删除"/**/"注释和字符串后面的“//”注释
+        if start > -1:
+            line = line[:start]
+
+        start = line.find(";")  # 删除；后面的内容
         if start > -1:
             line = line[:start]
 
@@ -443,11 +457,10 @@ class PyMacroParser(object):
 
         :return:dict
         """
-
         dump_dict =self._deepcopy(self._dump_dict)
         return dump_dict
 
-    def _deepcopy(self, src_dict={}):
+    def _deepcopy(self, src_dict):
         res={}
         for k,v in src_dict.items():
             if isinstance(v,dict):
@@ -533,14 +546,24 @@ class PyMacroParser(object):
 if __name__ == "__main__":
     a1 = PyMacroParser()
     a2 = PyMacroParser()
-    a1.load("a.cpp")
+    a1.load("a2.cpp")
     filename = "b.cpp"
     a1.dump(filename)  # 没有预定义宏的情况下，dump cpp
     a2.load(filename)
-    print a2.dumpDict()
-    a1.preDefine("MC1;MC2")  # 指定预定义宏，再dump
-    print  a1.dumpDict()
-    a1.dump("c.cpp")
+    for k,v in a2.dumpDict().items():
+        print k,":",v
+
+    # print '---------'
+    #
+    # a1.load("b.cpp")
+    # a1.dump("d.cpp")
+    # for k, v in a1.dumpDict().items():
+    #     print k, ":", v
+
+
+    # a1.preDefine("MC1;MC2")  # 指定预定义宏，再dump
+    # print  a1.dumpDict()
+    # a1.dump("c.cpp")
     #
     # a1.preDefine("   \f\n\r\tMC1; \t\\MC2; \v\vMC3\t; \fMC4")
     # print a1.dumpDict()
