@@ -72,6 +72,30 @@
 ///*cmment start*/#define /*this is comment*/ data2 .5e2f;;;;;
 //#define date3 L"this is a data"
 
+
+////#/*dksfnhj*/ define  MCT/*f dhs{{}lflk */ {"}}",'{}{',"}1{\\",/*fdhfhfdf*/{},"}1{",}
+//#define da7 {+0x22,-'0x23',+'0x55',-\000,};
+//#define da8 {'cc',',','c','\b','\x22','\x00','"'}
+//#define da10 {\x001,'"'}
+//#define A '\xff'
+//#define data41 12.03L
+#define     data41 12.03L///*
+#define data42/*/*/1.f//*/
+#define data43/*/*/10.2E-10f///*
+#define data44 "\\\\\"\\'\"\\\////////'/'//''////"
+#define data45 '\\b'
+#define String/*666*/12
+#define data46 "\'\"/**/\\\'"
+#define data47 "\'\""/**/"\\\'"
+#define data48 "\'\"" ##"/**/\\\'"
+#define data49 {"\'\"" ##"/**/\\\'"}
+#define data50 {"\'\""  "/**/\\\'"}
+
+
+//#define da88 {"cc",",","c","\b","\x22","'"}
+//#define da9 {,{'\x02','\x01','\x02'}}
+
+
 //#define da7 {+0x22,-'0x23',+'0x55',-\000,};
 //#define da8 {'cc',',','c','\b','\x22','"'}
 //#define da88 {"cc",",","c","\b","\x22","'"}

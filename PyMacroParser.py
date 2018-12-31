@@ -76,7 +76,7 @@ class PyMacroParser(object):
 
                     node.data.append(self._convert_rest(data,real_str))
                     start=index
-                    if node_finished==True:
+                    if node_finished==True :
                         break
                 elif i=='{':
                     new_node=TupleData()
@@ -87,6 +87,10 @@ class PyMacroParser(object):
                     break
                 if index==len(s) and s[-1]==',':
                     node.data.append(self._convert_rest('',[]))
+        if len(stack)>0:
+            node = stack.pop()
+            node.data.append(self._convert_rest('', []))
+
         tu=self._resolve_tuple_data(root)
 
         # if len(tu)==3:
@@ -105,10 +109,12 @@ class PyMacroParser(object):
                 #if len(sub)>0:
                 dict_item=dict_item+(sub,)
             else:
-               if i!=None:
-                  dict_item=dict_item+(i,)
-               # else:
-               #     dict_item=dict_item+(None,)
+                # if len(dict_item)==0:
+                #   dict_item=dict_item+(i,)
+                # else:
+                    if i!=None:
+                        dict_item=dict_item+(i,)
+
         return dict_item
 
     def _convert_cpp_to_python (self, s):
@@ -308,7 +314,49 @@ class PyMacroParser(object):
         else:
             return '-'+data.strip()
 
+    def _escape_tuple(self,v):
+        res=()
+        for i in v:
+            if isinstance(i,tuple):
+                res=res+(self._escape_tuple(i),)
+            else:
+                res=res+(self._escape_characters(i),)
+        return res
+
+    def _escape_characters(self,v):
+        if self._is_string(v) or self._is_w_string(v):
+            if v.find('\\\\')>-1:
+                v=v.replace('\\\\',string_placeholder)
+            # if v.find('\\?')>-1:
+            #     v= v.replace('\\f','?')
+            if v.find('\\f')>-1:
+                v= v.replace('\\f','\x0c')
+            if v.find('\\n')>-1:
+                v=v.replace('\\n','\n')
+            if v.find('\\t')>-1:
+                v=v.replace('\\t','\t')
+            if v.find('\\r') > -1:
+                v = v.replace('\\r', '\r')
+            if v.find('\\\'')>-1:
+                v=v.replace('\\\'',"'")
+            if v.find('\\\"')>-1:
+                v = v.replace('\\\"', '"')
+            if v.find('\\a')>-1:
+                v = v.replace('\\a', '\x07')
+            if v.find('\\b')>-1:
+                v = v.replace('\\b', '\x08')
+            if v.find('\\v')>-1:
+                v = v.replace('\\v', '\x0b')
+
+            v = self._escape_hex_character(v)
+            v = self._escape_octal_character(v)
+
+            v=v.replace(string_placeholder,'\\')
+        return v
+
     def _convert_session_datas(self, node, defindString, dump_dict):
+        if node==None:
+            return
         index = defindString.count(node.key)
         if index > 0:
             for item in node.define_data:
@@ -356,7 +404,11 @@ class PyMacroParser(object):
                     if is_notes==True:  #判断‘*/’结束符是否在当前行
                         end=line.find('*/')
                         if end>-1:
-                            line=line.replace(line[0:end+2]," ")
+                            line=line[end+2:]
+                            preline,real_str=context.pop()
+                            while preline.find(string_placeholder)>-1:
+                                preline.replace(string_placeholder,real_str.pop(0))
+                            line=preline+' '+line
                             is_notes=False
                         else:  #当前行还是注释行，跳过
                             line = p.readline()
@@ -459,7 +511,7 @@ class PyMacroParser(object):
             line = line[:start]
 
         line = line.strip()  # 去掉两端的空格
-        if line != "":
+        if line != "" or is_notes:
             # for s in old_string:
             #     start=line.find(':')
             #     line = line[:start]+s+line[start+1:]
@@ -554,10 +606,6 @@ class PyMacroParser(object):
                 self._pre_define_macros.append(item)
                 self._dump_dict[item]=None
 
-        try:
-            self._convert_session_datas(self._root, self._pre_define_macros, self._dump_dict)
-        except:
-            raise
 
     def _remove_control_chars(self,s):
         for i in range(0, 32):
@@ -571,6 +619,12 @@ class PyMacroParser(object):
 
         :return:dict
         """
+
+        try:
+            self._convert_session_datas(self._root, self._pre_define_macros, self._dump_dict)
+        except:
+            raise
+
         dump_dict =self._escape_dump_dict(self._dump_dict)
         return dump_dict
         return self._dump_dict
@@ -587,45 +641,6 @@ class PyMacroParser(object):
                    res[k]=self._escape_characters(v)
         return res
 
-    def _escape_tuple(self,v):
-        res=()
-        for i in v:
-            if isinstance(i,tuple):
-                res=res+(self._escape_tuple(i),)
-            else:
-                res=res+(self._escape_characters(i),)
-        return res
-
-    def _escape_characters(self,v):
-        if self._is_string(v) or self._is_w_string(v):
-            if v.find('\\\\')>-1:
-                v=v.replace('\\\\',string_placeholder)
-            # if v.find('\\?')>-1:
-            #     v= v.replace('\\f','?')
-            if v.find('\\f')>-1:
-                v= v.replace('\\f','\x0c')
-            if v.find('\\n')>-1:
-                v=v.replace('\\n','\n')
-            if v.find('\\t')>-1:
-                v=v.replace('\\t','\t')
-            if v.find('\\r') > -1:
-                v = v.replace('\\r', '\r')
-            if v.find('\\\'')>-1:
-                v=v.replace('\\\'',"'")
-            if v.find('\\\"')>-1:
-                v = v.replace('\\\"', '"')
-            if v.find('\\a')>-1:
-                v = v.replace('\\a', '\x07')
-            if v.find('\\b')>-1:
-                v = v.replace('\\b', '\x08')
-            if v.find('\\v')>-1:
-                v = v.replace('\\v', '\x0b')
-
-            v = self._escape_hex_character(v)
-            v = self._escape_octal_character(v)
-
-            v=v.replace(string_placeholder,'\\')
-        return v
 
     def dump(self,f):
         """
@@ -634,6 +649,11 @@ class PyMacroParser(object):
         :param f:file path
         :return:None
         """
+
+        try:
+            self._convert_session_datas(self._root, self._pre_define_macros, self._dump_dict)
+        except:
+            raise
 
         try:
             with open(f, 'w') as p:
@@ -674,7 +694,8 @@ class PyMacroParser(object):
                 res=res+(string_placeholder,)
             elif self._is_tuple(i):
                 res=res+(self._remove_string(i,old_string),)
-            else:res=res+(i,)
+            else:
+                res=res+(i,)
 
         return res
 
@@ -712,31 +733,42 @@ if __name__ == "__main__":
     # a1.preDefine("")  # 指定预定义宏，再dump
     # a1.dump("cc.cpp")
 
+    a1 = PyMacroParser()
+    a2 = PyMacroParser()
+    a1.load("a.cpp")
+    filename = "b.cpp"
+    a1.dump(filename)  # 没有预定义宏的情况下，dump cpp
+    a2.load(filename)
+    print a2.dumpDict()
+    a1.preDefine("MC1;MC2")  # 指定预定义宏，再dump
+    print a1.dumpDict()
+    a1.dump("c.cpp")
 
     # a1 = PyMacroParser()
     # a1.load("a2.cpp")
     # filename = "b.cpp"
-    # a1.dump(filename)  # 没有预定义宏的情况下，dump cpp
-    # print a1.dumpDict()
-    #
-    # # for k,v in a1.dumpDict().items():
-    # #     print k,":",v
+    # a1.preDefine("   \f\n\r\tMC1; \t\\MC2; ")
+    # a1.dump(filename)
+    # for k,v in a1.dumpDict().items():
+    #     print k,":",v
     # print '---------'
-    # # a2=PyMacroParser()
-    # # a2.load('b.cpp')
-    # # a2.dump('c.cpp')
-    # # print a2.dumpDict()
+    # a2=PyMacroParser()
+    # a2.load('b.cpp')
+    # a2.dump('c.cpp')
+    # print a2.dumpDict()
 
-    a1 = PyMacroParser()
-    a1.load("a2.cpp")
-    a1.preDefine("MC1;MC2")
-    print a1.dumpDict()
-    a1.dump('b.cpp')
-    print '---------'
-    a1.preDefine("\f\n\r\tMC1; \t\\MC2;")
-    print a1.dumpDict()
-    a1.dump('c.cpp')
-    a1.dump('d.cpp')
+    # a1 = PyMacroParser()
+    # a1.load("a2.cpp")
+    # a1.preDefine("MC1;MC2")
+    # print a1.dumpDict()
+    # a1.dump('b.cpp')
+    # print '---------'
+    #
+    # a2 = PyMacroParser()
+    # a2.preDefine("\f\n\r\tMC1; \t\\MC2;")
+    # print a2.dumpDict()
+    # a2.dump('c.cpp')
+    # a2.dump('d.cpp')
 
 
     # a1.preDefine("MC1;MC2;MC3;MC4")  # 指定预定义宏，再dump
