@@ -154,31 +154,25 @@ class PyMacroParser(object):
 
         #处理字符串
         if v.find(string_placeholder) > -1:
-            # 去掉使用##（拼接的字符串）
-            if v.find('##') > -1:
-                items = v.split('##')
-                res = ''
-                for i in items:
-                    res += i.strip()
-                v = res
+            # 去掉##或者空格（使用##或空格拼接拼接的字符串）
+            v=v.replace('##','')
+            v=v.replace(' ','')
 
-            if len(real_str)>1: #有拼接
-                raise Exception
+            is_W_string=False
+            if v.find("L"+string_placeholder)>-1:
+                is_W_string=True
+            v=v.replace("L",'')
 
             # 把保存的字符串还原
             while v.find(string_placeholder) > -1:
                 replace_index = v.find(string_placeholder)
-                v = v[:replace_index] + real_str.pop(0) + v[replace_index + 2:]
+                v = v[0:replace_index] + real_str.pop(0)[1:-1] + v[replace_index + 2:]
 
-            #转换宽字符串
-            index = v.find("L\"")
-            if index > -1:
-                v = v.replace('L\"', "")
-                v = v[:-1]
-                return self._process_splicing(v.decode('utf-8')) #encode('string_escape')
 
-            #转换字符串
-            return self._process_splicing(v[1:-1])
+            if is_W_string:#转换宽字符串
+                return v.decode('utf-8') #encode('string_escape')
+            else: #转换字符串
+                return v
 
         #计算正负号
         v=self._sign_strip(v)
@@ -198,8 +192,6 @@ class PyMacroParser(object):
 
         raise ValueError
 
-    def _process_splicing(self,v):
-        return v.replace("\"","")
 
     def _to_float(self,v):
         try:
