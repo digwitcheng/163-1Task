@@ -11,25 +11,24 @@
 //#define d7 {L"this is" ## " a data"}
 //#define d8  " a data  "
 
-//#define charc3 L"\\"
-//#define charc2 "\""
-//#define charc4 "}1{\\"
-//#define charc "\\\""//"':"'/\*/
-//#define A '\x22\134'
-//#define charc5 '\\\''
-//#define charc6 "\"\\"
-//#define Float 2.3E-3
-
-//#define data22 {{'a\''}, '\\',{'\"'} }
-////#define data20/**/{ {2.0, "abc"}, {1.5, "def"}, {5.6f, "7.2"}}
-////#define data26 {{"{\\}"} , {/*"//"''*/ } , {- +2.0f, "abc" } ,{ '\\\'',"def"},{5.6f,"h/**/lo", '//'}, {"#define",.5e2}} // 浮点与字符串组成的结构体初始化聚合， 再进一步聚合组成了数组
-////#define data21 {{"{\'}\\"}  ,{'{}'},};
-////#define data23 {{{{{}}}}}
-//#define data25 {{ 2 ,  3 },{},,}
-//#define data27 {'}{',"{}}{",}
-//#define data28 {3,"",4}
-//#define data29 {}{, , ,/*{}*/,1}
-//#/*dksfnhj*/ define  MCT/*f dhsdjklflk*/ {"}1{\\",/*fdhfhfdf*/{},"}1{",}
+#define charc3 L"\\"
+#define charc2 "\""
+#define charc4 "}1{\\"
+#define charc "\\\""//"':"'/\*/
+#define A '\x22\134'
+#define charc5 '\\\''
+#define charc6 "\"\\"
+#define Float 2.3E-3
+#define data22 {{'a\''}, '\\',{'\"'} }
+#define data20/**/{ {2.0, "abc"}, {1.5, "def"}, {5.6f, "7.2"}}
+#define data26 {{"{\\}"} , {/*"//"''*/ } , {- +2.0f, "abc" } ,{ '\\\'',"def"},{5.6f,"h/**/lo", '//'}, {"#define",.5e2}} // 浮点与字符串组成的结构体初始化聚合， 再进一步聚合组成了数组
+#define data21 {{"{\'}\\"}  ,{'{}'},};
+#define data23 {{{{{}}}}}
+#define data25 {{ 2 ,  3 },{},,}
+#define data27 {'}{',"{}}{",}
+#define data28 {3,"",4}
+#define data29 {}{, , ,/*{}*/,1}
+#/*dksfnhj*/ define  MCT/*f dhsdjklflk*/ {"}1{\\",/*fdhfhfdf*/{},"}1{",}
 
 #define da1 {}
 #define da2 {{,,,,}}
