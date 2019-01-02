@@ -26,11 +26,26 @@ def split_string(line):
         raise Exception('illegal string')
     item=line.split(None,2)
     if len(item)==1:
-        return [item[0]]
+        if item[0]=='endif' or item[0]=='else':
+            return [item[0]]
+        else:
+            raise Exception('error define')
     if len(item)==2:
-        return [item[0],item[1],'None']
+        if item[0]=='define' or item[0]=='ifdef' or item[0]=='ifndef' or item[0]=='undef':
+            return [item[0],item[1],'None']
+        elif item[0]=='endif' or item[0]=='else':
+            return [item[0]]
+        else:
+            raise Exception('error define')
     else:
-        return [item[0],item[1],item[2]]
+        if item[0]=='ifdef' or item[0]=='ifndef' or item[0]=='undef':
+            return [item[0],item[1],'None']
+        elif item[0]=='endif' or item[0]=='else':
+            return [item[0]]
+        elif item[0]=='define':
+            return [item[0],item[1],item[2]]
+        else:
+            raise Exception('error define')
 
 
 string_placeholder='%%'
@@ -170,7 +185,9 @@ class PyMacroParser(object):
             # 把保存的字符串还原
             while v.find(string_placeholder) > -1:
                 replace_index = v.find(string_placeholder)
-                v = v[0:replace_index] + real_str.pop(0)[1:-1] + v[replace_index + 2:]
+                string_temp=real_str.pop(0)
+                string_temp2=string_temp[1:-1]
+                v = v[0:replace_index] +string_temp2 + v[replace_index + 2:]
 
 
             if is_W_string:#转换宽字符串
@@ -181,49 +198,41 @@ class PyMacroParser(object):
         #计算正负号
         v=self._sign_strip(v)
 
+        if v=='':
+            return None
         # 转换为整数
         try:
             integer = self._str_to_num(v)
+            return integer
         except:
             try:
-               Float= self._to_float(v)
+                float_num=self._to_float(v)
+                return float_num
             except:
-                pass
-            else:
-                return Float
-        else:
-            return integer
+                raise Exception('convert float fail!')
 
         raise ValueError
 
 
     def _to_float(self,v):
-        try:
-            # 转换有f的浮点型
-            if  v.find('f') > -1:
-                return string.atof(v.replace('f', ''))
+        # 转换有f的浮点型
+        if  v.find('f') > -1:
+            return string.atof(v.replace('f', ''))
 
-            # 转换有F的浮点型
-            if  v.find('F') > -1:
-                return string.atof(v.replace('F', ''))
+        # 转换有F的浮点型
+        if  v.find('F') > -1:
+            return string.atof(v.replace('F', ''))
 
-            # 转换有l的浮点型
-            if v.find('l') > -1:
-                return string.atof(v.replace('l', ''))
+        # 转换有l的浮点型
+        if v.find('l') > -1:
+            return string.atof(v.replace('l', ''))
 
-            # 转换有L的浮点型
-            if v.find('L') > -1:
-                return string.atof(v.replace('L', ''))
+        # 转换有L的浮点型
+        if v.find('L') > -1:
+            return string.atof(v.replace('L', ''))
 
-            # 转换没有f的浮点型
-            try:
-                f = float(v)
-            except:
-                pass
-            else:
-                return f
-        except:
-          raise ValueError
+        # 转换没有f的浮点型
+        return float(v)
 
     def _str_to_num(self,v):
         v=v.replace('u','')
@@ -269,11 +278,12 @@ class PyMacroParser(object):
                 )and int(s[start + 2:i + 1], 16) < 256:
                     continue
                 else:
+                    i-=1
                     break
             if i > start:
-                escape_str = s[start:i]
                 try:
-                    num = int(s[start + 2:i], 16)
+                    escape_str=s[start+2:i+1]
+                    num = int(escape_str, 16)
                 except:
                     raise Exception('illegal num ')
                 after_escape = chr(num)
@@ -289,10 +299,11 @@ class PyMacroParser(object):
                 if i<len(s) and ord('0')<=ord(s[i])<ord('8') and int(s[start+1:i+1],8)<256:
                     continue
                 else:
+                    i-=1
                     break
             if i>start+1:
                 # escape_str=s[start:i]
-                num=int(s[start+1:i],8)
+                num=int(s[start+1:i+1],8)
                 after_escape=chr(num)
                 s=s[:start+1]+after_escape+s[i:]
             else:
@@ -599,8 +610,8 @@ class PyMacroParser(object):
         """
         self._pre_define_macros=[]
         self._dump_dict={}
-        #s=self._escape_characters(s)
-        #s=self._remove_control_chars(s)
+        # s=self._escape_characters(s)
+        # s=self._remove_control_chars(s)
         macros=s.split(';')
         for item in macros:
             item=item.strip()
@@ -652,8 +663,6 @@ class PyMacroParser(object):
                     res[k]=self._escape_tuple(v)
                 else:
                    res[k]=self._escape_characters(v)
-                   if k=='str22':
-                       print len(self._escape_characters(v))
         return res
 
     def dump(self,f):
@@ -664,21 +673,24 @@ class PyMacroParser(object):
         :return:None
         """
 
-        self._dump_dict = {}
-        pre_define_macros = self._deep_copy_list(self._pre_define_macros)
-        try:
-            self._convert_session_datas(self._root, pre_define_macros, self._dump_dict)
-        except:
-            raise
 
+        # self._dump_dict = {}
+        # pre_define_macros = self._deep_copy_list(self._pre_define_macros)
+        # try:
+        #     self._convert_session_datas(self._root, pre_define_macros, self._dump_dict)
+        # except:
+        #     raise
+
+        dump_dict=self.dumpDict()
+        print  dump_dict
         try:
             with open(f, 'w') as p:
-                for k,v in self._dump_dict.items():
+                for k,v in dump_dict.items():
 
                     if self._is_w_string(v):
-                        v =  "L\"" + v + "\""
+                        v =  "L\"" + self._revoke_escape(v) + "\""
                     elif self._is_string(v):
-                        v="\""+v+"\""
+                        v="\""+self._revoke_escape(v)+"\""
                     elif v is False:
                         v='false'
                     elif v is True:
@@ -686,21 +698,69 @@ class PyMacroParser(object):
                     elif v is None:
                         v=''
                     elif self._is_tuple(v):
-                        old_string=[]
-                        v=self._remove_string(v,old_string)
-                        v = str(tuple(v))
-                        v=v.replace('\'','')
-                        v=v.replace('\"','')
-                        v = v.replace('(', '{')
-                        v = v.replace(')', '}')
-                        start=v.find(string_placeholder,0,len(v))
-                        while start>-1 :
-                            v=v[:start]+'\"'+self._escape_characters(old_string.pop(0))+'\"'+v[start+2:]
-                            start = v.find(string_placeholder,start, len(v))
+                        v=self._tuple_to_string(v)
+                        # old_string=[]
+                        # v=self._remove_string(v,old_string)
+                        # v = str(tuple(v))
+                        # v=v.replace('\'','')
+                        # v=v.replace('\"','')
+                        # v = v.replace('(', '{')
+                        # v = v.replace(')', '}')
+                        # start=v.find(string_placeholder,0,len(v))
+                        # while start>-1 :
+                        #     v=v[:start]+'\"'+self._escape_characters(old_string.pop(0))+'\"'+v[start+2:]
+                        #     start = v.find(string_placeholder,start, len(v))
                         v=v.replace(',}','}')
                     p.write('#define '+str(k)+' '+ str(v)+'\n')
         except :
              raise
+    def _tuple_to_string(self,s):
+        res=''
+        res+='{'
+        for v in s:
+            if isinstance(v,tuple):
+                res+=self._tuple_to_string(v)
+            elif self._is_w_string(v):
+                res+= "L\"" + self._revoke_escape(v) + "\""
+            elif self._is_string(v):
+                res+= "\"" + self._revoke_escape(v) + "\""
+            elif v is False:
+                res+= 'false'
+            elif v is True:
+                 res+= 'true'
+            elif v is None:
+                  res+= ''
+            else:
+                res+=str(v)
+            res+=','
+        res+='}'
+        return res
+    def _revoke_escape(self,s):
+        res=''
+        for ch in s:
+            if ch=='\\':
+                res+='\\\\'
+            elif ch=='\f':
+                res+='\\f'
+            elif ch=='\n':
+                res+='\\n'
+            elif ch=='\t':
+                res+='\\t'
+            elif ch == '\r':
+                res += '\\r'
+            elif ch == '\a':
+                res += '\\a'
+            elif ch == '\b':
+                res += '\\b'
+            elif ch == '\v':
+                res += '\\v'
+            elif ch == '\'':
+                res += '\\\''
+            elif ch == '\"':
+                res += '\\\"'
+            else:
+                res+=ch
+        return res
 
     def _remove_string(self,v,old_string):
         res=()
@@ -738,65 +798,26 @@ class PyMacroParser(object):
             return True
 
 if __name__ == "__main__":
+
     # a1 = PyMacroParser()
-    # a2 = PyMacroParser()
-    # a1.load("a2.cpp")
-    # filename = "b.cpp"
-    # a1.dump(filename)  # 没有预定义宏的情况下，dump cpp
-    # a2.load(filename)
-    # print a2.dumpDict()
-    # print a1.dumpDict()
-    # a1.dump("c.cpp")
-    # a1.preDefine("")  # 指定预定义宏，再dump
-    # a1.dump("cc.cpp")
+    # a1.load("a3.cpp")
+    # a1.dump("b.cpp")
+    # #print a1.dumpDict()
+    # #a1.load("b.cpp")
+    # #a1.dump("c.cpp")
 
     a1 = PyMacroParser()
-    a1.load("tuple_test.cpp")
-    a1.preDefine("MC1;MC2")  # 指定预定义宏，再dump
-    a1.dump("b.cpp")
+    a1.load("a3.cpp")
+    a1.preDefine("MC1;MC2")
     print a1.dumpDict()
-    a1.load("tuple_test.cpp")
-    a1.dump("c.cpp")
-    print a1.dumpDict()
-
+    a1.dump('b.cpp')
     print '---------'
 
-    # a2 = PyMacroParser()
-    # a2.load("a.cpp")
-    # a2.preDefine("MC1;MC2")  # 指定预定义宏，再dump
-    # a2.dump("b.cpp")
-    # print a2.dumpDict()
-    # a2.load("a.cpp")
-    # a2.dump("c.cpp")
-    # print a2.dumpDict()
-
-
-    # a1 = PyMacroParser()
-    # a1.load("a2.cpp")
-    # filename = "b.cpp"
-    #a1.preDefine("MC1;MC2;;;")
-    # a1.dump(filename)
-    # for k,v in a1.dumpDict().items():
-    #     print k,":",v
-    # print '---------'
-    # a2=PyMacroParser()
-    # a2.load('b.cpp')
-    # a2.dump('c.cpp')
-    # print a2.dumpDict()
-
-    # a1 = PyMacroParser()
-    # a1.load("a2.cpp")
-    # a1.preDefine("MC1;MC2")
-    # print a1.dumpDict()
-    # a1.dump('b.cpp')
-    # print '---------'
-    #
-    # a2 = PyMacroParser()
-    # a2.preDefine("\f\n\r\tMC1; \t\\MC2;")
-    # print a2.dumpDict()
-    # a2.dump('c.cpp')
-    # a2.dump('d.cpp')
-
+    a2 = PyMacroParser()
+    a2.preDefine("MC1;MC2")
+    print a2.dumpDict()
+    a2.dump('c.cpp')
+    a2.dump('d.cpp')
 
     # a1.preDefine("MC1;MC2;MC3;MC4")  # 指定预定义宏，再dump
     # print  a1.dumpDict()
@@ -804,23 +825,6 @@ if __name__ == "__main__":
     #
     # a1.preDefine("   \f\n\r\tMC1; \t\\MC2; \v\vMC3\t; \fMC4")
     # print a1.dumpDict()
-
-    # print '-------------------------'
-    # a1.preDefine("MC1;MC2")
-    # a1.load("a2.cpp")
-    # print a1.dumpDict()
-    # print '-------------------------'
-    # a1.preDefine("")
-    # a1.load("a2.cpp")
-    # print a1.dumpDict()
-
-    # filename = "b.cpp"
-    # a1.dump(filename)  # 没有预定义宏的情况下，dump cpp
-    # a2.load(filename)
-    # print a2.dumpDict()
-    # a1.preDefine("MC1;MC2")  # 指定预定义宏，再dump
-    # a1.dumpDict()
-    # a1.dump("c.cpp")
 
     
 

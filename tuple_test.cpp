@@ -20,17 +20,17 @@
 
 #define data1  /* this is float
 may be changed
-*/0x0e
+*/+0x0e
 #define data2  /* this is float
 may be changed
 */016
 
 #ifdef MC2
 
-//#define da{}  { 1, }
-//#define da2 {{{1}}}
-//#define da3     {{1},{2,},/*/*/}
-//#define A '\x22\134'
+#define da{}  { 1, }
+#define da2 {{{1}}}
+#define da3     {{1},{2,},/*/*/}
+#define A '\x22\134'
 
 #else
 
@@ -38,15 +38,25 @@ may be changed
 #define da44 {1,}
 
 #endif //end MC2
-#define da1 {1,2,"/**/"};;
-#define   aaa { 1,2,'\00',3 }; {};
+
+
+#define da1 {}
+#define da2 { {,,,,}}
+#define da3 { 1 , { 2 , } , { 3, 4 , } }
+#define da4 {,}
+#define da5 {,{},}
+#define da6 {,{},{}}
 
 #else
+
+#define da1 {1,2,"/**/"};;
+#define   aaa { 1,2,'\00'}; {};
 
 #endif //MC1
 
 #ifdef MC2
 #undef MC2
-#endif
-
+#undef
+#else niha  ee
+#define eee
 #endif // !MC_TEST
