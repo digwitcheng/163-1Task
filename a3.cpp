@@ -1,5 +1,6 @@
 #ifndef MCTEST
 #define MCTEST
+#define MC1
 #ifdef MC1
 #define charc3 L"\\"
 #define charc2 "\""
