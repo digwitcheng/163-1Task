@@ -68,8 +68,8 @@ class PyMacroParser(object):
     def _str_to_tuple(self, tup_str):
         s,real_str=tup_str
         stack = []
-        root = TupleData()
-        stack.append(root)
+        head = TupleData()
+        stack.append(head)
         index = 0
         start = 0
         # end = start
@@ -78,26 +78,11 @@ class PyMacroParser(object):
             while index<len(s):
                 i=s[index]
                 index+=1
-                if i == ',' or index==len(s):
-                    if index==len(s) and i!=',':
-                        data = s[start:]
-                    else:
-                       data=s[start:index-1]
-                    node_finished=False
-                    if data.find('}')>-1:
-                        data=data.replace('}','')
-                        node_finished=True
-                    # while data.find(string_placeholder)>-1 and len(temp_str)>0:
-                    #     replace_index=data.find(string_placeholder)
-                    #     data=data[:replace_index] + temp_str.pop(0) + data[replace_index + 2:]
-                    # temp_str=None
-                    # if (data.find(string_placeholder)>-1 or data.find(char_placeholder)>-1) and len(real_str)>0:
-                    #     temp_str=real_str.pop(0)
-
-                    node.data.append(self._convert_rest(data,real_str))
+                if i == ',':
+                    data=s[start:index-1]
+                    if data.strip()!='':
+                        node.data.append(self._convert_rest(data,real_str))
                     start=index
-                    if node_finished==True :
-                        break
                 elif i=='{':
                     new_node=TupleData()
                     node.data.append(new_node)
@@ -105,21 +90,14 @@ class PyMacroParser(object):
                     stack.append(node)
                     stack.append(new_node)
                     break
-                # if index==len(s) and s[-1]==',':
-                #     node.data.append(self._convert_rest('',[]))
-        # if len(stack)>0:
-        #     node = stack.pop()
-        #     node.data.append(self._convert_rest('', []))
+                elif i=='}':
+                    data = s[start:index - 1]
+                    node.data.append(self._convert_rest(data, real_str))
+                    start = index
+                    node = stack.pop()
 
-        tu=self._resolve_tuple_data(root)
 
-        # if len(tu)!=3:
-        #     return (((((12)))),((12)),(12))
-
-        # for i in tu:
-        #     if isinstance(i,tuple) and len(i)>3:
-        #         return (((1)),(2),(3))
-        return tu
+        return self._resolve_tuple_data(head.data.pop(0))
 
     def _resolve_tuple_data(self,node):
         dict_item=()
@@ -142,11 +120,7 @@ class PyMacroParser(object):
             for i in real_str:
                 temp_v.append(i)
             if v.find('{')>-1:
-                start=v.find('{')
-                end=v.rfind('}')
-                if end==-1 or end<start or v.count('{')!=v.count('}'):
-                    raise Exception('missing "}" or "{"')
-                return self._str_to_tuple((v[start + 1:end], temp_v))
+                return self._str_to_tuple((v, temp_v))
 
             return self._convert_rest(v,temp_v)
         except :
@@ -173,8 +147,11 @@ class PyMacroParser(object):
                     raise ValueError
                 v = v[:replace_index] + real_str.pop(0) + v[replace_index + 2:]
 
-            # 转换字符常量
-            return self._chartointeger(v[1:-1])
+            v, need_minus_sign = self._sign_strip(v)
+            if need_minus_sign:
+                 return -self._chartointeger(v[1:-1])
+            else:
+                return self._chartointeger(v[1:-1])
 
         #处理字符串
         if v.find(string_placeholder) > -1:
@@ -253,8 +230,11 @@ class PyMacroParser(object):
             v=v[2:]
             return int(v,16)
         if v[:1]=='0':
-            v=v[1:]
-            return int(v,8)
+            num=int(v)
+            if num>7:
+                return int(v,8)
+            else:
+                return num
         if v[:2]=='0b' or v[:2]=='0B':
             v=v[2:]
             return int(v,2)
@@ -262,15 +242,24 @@ class PyMacroParser(object):
 
     def _chartointeger(self, s):
         res=0
-        s=self._escape_characters(s)
+
+        # new_s=s[-4:]
+        # index=len(new_s)
+        # for c in s[-4:]:
+        #     res += ord(c) * (256 ** index)
+        #     index -= 1
+        # return res
+
+
+        new_s=self._escape_characters(s)
         # s=self._escape_hex_character(s)
         # s=self._escape_octal_character(s)
-        index=len(s)-1
+        index=len(new_s)-1
         if index>3:
             #raise Exception('Too many characters in character constants')
-            s=s[-4:]
+            new_s=new_s[-4:]
             index=3
-        for c in s:
+        for c in new_s:
             res+=ord(c)*(256**index)
             index-=1
         return  res
@@ -296,7 +285,7 @@ class PyMacroParser(object):
                 except:
                     raise Exception('illegal num ')
                 after_escape = chr(num)
-                s = s[:start + 1] + after_escape + s[i:]
+                s = s[:start] + after_escape + s[i+1:]
         return s
 
     def _escape_octal_character(self,s):
@@ -314,7 +303,7 @@ class PyMacroParser(object):
                 # escape_str=s[start:i]
                 num=int(s[start+1:i+1],8)
                 after_escape=chr(num)
-                s=s[:start+1]+after_escape+s[i:]
+                s=s[:start]+after_escape+s[i+1:]
             else:
                 s=s[:start]+s[start+1:]
         return s
@@ -408,21 +397,16 @@ class PyMacroParser(object):
             with open(f, 'r') as p:
                 line=p.readline()
                 while line:
-                    if is_notes==True:  #判断‘*/’结束符是否在当前行
-                        end=line.find('*/')
-                        if end>-1:
-                            line=line[end+2:]
-                            preline,real_str=context.pop()
-                            while preline.find(string_placeholder)>-1:
-                                pre_start=preline.find(string_placeholder)
-                                preline= preline[:pre_start]+real_str.pop(0)+preline[pre_start+2:]
-                            line=preline+' '+line
-                            is_notes=False
-                        else:  #当前行还是注释行，跳过
-                            line = p.readline()
-                            continue
                     is_notes=self.remove_notes(context,line)
-                    line=p.readline()
+                    if is_notes:
+                        next_line=p.readline()
+                        if next_line:
+                            line=line+next_line#/*注释在当前行未匹配到结束，把下一行拼接到当前行重新操作
+                        else:
+                            end=line.rfind('/*') #文件没有下一行了，无法匹配到*/，直接删除最后的/*后面的内容
+                            line=line[:end]
+                    else:
+                        line=p.readline()
         except :
              raise
         return context
@@ -504,12 +488,15 @@ class PyMacroParser(object):
 
         # 屏蔽掉字符串，删除注释后再插入原来的位置
         old_string = []  # 里面的项为(原字符串),在去除掉注释后再插入
-        line,is_notes=self._replace_string(line,old_string)
-
+        new_line,is_notes=self._replace_string(line,old_string)
         if is_notes:
-            start=line.find("/*")
-            if start>-1:
-                line=line[:start]
+            return is_notes
+        else:
+            line=new_line
+        # if is_notes:
+        #     start=line.find("/*")
+        #     if start>-1:
+        #         line=line[:start]
         start = line.find("//")  # 删除"/**/"注释和字符串后面的“//”注释
         if start > -1:
             line = line[:start]
